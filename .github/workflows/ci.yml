@@ -1,0 +1,58 @@
+on:
+  - push
+
+name: Continuous Integration
+jobs:
+  tests:
+    name: Run tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          coverage: xdebug
+          tools: composer:v2
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "{cache_dir}={$(composer config cache-files-dir)}" >> $GITHUB_OUTPUT
+
+      - name: Cache PHP dependencies
+        uses: actions/cache@v4
+        id: vendor-cache
+        with:
+          path: vendor
+          key: ${{ runner.os }}-build-${{ hashFiles('**/composer.lock') }}
+
+      - name: Install Composer dependencies
+        if: steps.composer-cache.outputs.cache-hit != 'true'
+        uses: php-actions/composer@v6
+        with:
+          php_version: 8.4
+          version: 2
+          args: --ignore-platform-reqs
+        env:
+          ACTION_PHP_VERSION: 8.4
+
+      - name: Run code styling with phpcs
+        run: ./vendor/bin/phpcs
+
+      - name: Run header check with docheader
+        run: ./vendor/bin/docheader check src/ test/
+
+      - name: Run static code analysis with psalm
+        run: ./vendor/bin/psalm --config=psalm.xml
+
+#      - name: Run unit tests with phpunit
+#        run: ./vendor/bin/phpunit --coverage-clover build/logs/clover.xml
+
+#      - name: Run coverage
+#        env:
+#          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        run: ./vendor/bin/php-coveralls --coverage_clover=build/logs/clover.xml -v
